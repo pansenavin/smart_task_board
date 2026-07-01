@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Task Board</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1, h2 { color: #222; }
+        .messages { list-style: none; padding: 0; }
+        .messages li { padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+        .messages li.success { background-color: #d4edda; color: #155724; }
+        .messages li.error { background-color: #f8d7da; color: #721c24; }
+        form.create-form { display: flex; gap: 10px; margin-bottom: 20px; }
+        form.create-form input, form.create-form select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex: 1; }
+        button { padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+        .priority-HIGH { color: #dc3545; font-weight: bold; }
+        .priority-MEDIUM { color: #ffc107; font-weight: bold; }
+        .priority-LOW { color: #28a745; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Smart Task Board</h1>
+        
+        <ul class="messages" id="messages-container">
+        </ul>
+
+        <h2>Create Task</h2>
+        <form class="create-form" id="create-form">
+            <input type="text" name="title" id="title" placeholder="Task Title" required>
+            <select name="priority" id="priority" required>
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+            </select>
+            <input type="number" name="estimated_time" id="estimated_time" placeholder="Estimated Time (min)" required min="1">
+            <button type="submit">Create</button>
+        </form>
+
+        <h2>Tasks</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Created At</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in tasks %}
+                <tr>
+                    <td>{{ task.title }}</td>
+                    <td class="priority-{{ task.priority }}">{{ task.priority }}</td>
+                    <td>
+                        {{ task.status }}
+                        {% if task.status == 'LOCKED' %}<br><small>(until {{ task.locked_until|time:"H:i" }})</small>{% endif %}
+                    </td>
+                    <td>{{ task.created_at|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        {% if task.status != 'COMPLETED' %}
+                        <button onclick="completeTask({{ task.id }})">Complete</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5">No tasks available.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function showMessage(msg, isError=false) {
+            const container = document.getElementById('messages-container');
+            container.innerHTML = `<li class="${isError ? 'error' : 'success'}">${msg}</li>`;
+        }
+
+        document.getElementById('create-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const data = {
+                title: document.getElementById('title').value,
+                priority: document.getElementById('priority').value,
+                estimated_time: parseInt(document.getElementById('estimated_time').value)
+            };
+
+            fetch('/api/tasks/create/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if(response.ok) {
+                    window.location.reload();
+                } else {
+                    return response.json().then(err => { throw err; });
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to create task.', true);
+            });
+        });
+
+        function completeTask(taskId) {
+            fetch(`/api/tasks/${taskId}/complete/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json().then(data => ({status: response.status, body: data})))
+            .then(res => {
+                if(res.status === 200) {
+                    window.location.reload();
+                } else {
+                    showMessage(res.body.hint || 'Failed to complete task.', true);
+                }
+            })
+            .catch(error => {
+                showMessage('An error occurred.', true);
+            });
+        }
+    </script>
+</body>
+</html>
